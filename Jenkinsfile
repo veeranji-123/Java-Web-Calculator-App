@@ -71,7 +71,7 @@ pipeline {
 
         /* === Stage 5: Deploy to Tomcat === */
         stage('Deploy to Tomcat') {
-            agent { label 'Tomcat' }
+            agent { label 'tomcat' }
             steps {
                 withCredentials([
                     usernamePassword(credentialsId: 'nexus', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW'),
