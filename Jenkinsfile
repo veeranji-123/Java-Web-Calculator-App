@@ -23,7 +23,7 @@ pipeline {
                 echo '📦 Cloning source from GitHub...'
                 checkout([$class: 'GitSCM',
                     branches: [[name: '*/main']],
-                    userRemoteConfigs: [[url: 'https://github.com/mrtechreddy/Java-Web-Calculator-App.git']]
+                    userRemoteConfigs: [[url: 'https://github.com/veeranji-123/Java-Web-Calculator-App.git']]
                 ])
             }
         }
@@ -51,7 +51,7 @@ pipeline {
         /* === Stage 4: Upload Artifact to Nexus (via REST API) === */
         stage('Upload Artifact to Nexus') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'Nexus', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW')]) {
+                withCredentials([usernamePassword(credentialsId: 'nexus', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW')]) {
                     sh '''#!/bin/bash
                         set -e
                         WAR_FILE=$(ls target/*.war | head -1)
@@ -74,8 +74,8 @@ pipeline {
             agent { label 'Tomcat' }
             steps {
                 withCredentials([
-                    usernamePassword(credentialsId: 'Nexus', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW'),
-                    usernamePassword(credentialsId: 'Tomcat', usernameVariable: 'TOMCAT_USR', passwordVariable: 'TOMCAT_PSW')
+                    usernamePassword(credentialsId: 'nexus1', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW'),
+                    usernamePassword(credentialsId: 'tomcat', usernameVariable: 'TOMCAT_USR', passwordVariable: 'TOMCAT_PSW')
                 ]) {
                     sh '''#!/bin/bash
                         set -e
