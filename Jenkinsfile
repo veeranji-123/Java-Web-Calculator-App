@@ -74,7 +74,7 @@ pipeline {
             agent { label 'Tomcat' }
             steps {
                 withCredentials([
-                    usernamePassword(credentialsId: 'nexus1', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW'),
+                    usernamePassword(credentialsId: 'nexus', usernameVariable: 'NEXUS_USR', passwordVariable: 'NEXUS_PSW'),
                     usernamePassword(credentialsId: 'tomcat', usernameVariable: 'TOMCAT_USR', passwordVariable: 'TOMCAT_PSW')
                 ]) {
                     sh '''#!/bin/bash
