@@ -1,19 +1,19 @@
 pipeline {
-    agent { label 'SonarQube' }
+    agent { label 'Sonar' }
 
     tools {
         jdk 'JDK17'
-        maven 'Maven'
+        maven 'maven'
     }
 
     environment {
         SONARQUBE_SERVER = 'SonarQube'
         MVN_SETTINGS = '/etc/maven/settings.xml'
-        NEXUS_URL = 'http://18.226.34.227:8081'
+        NEXUS_URL = 'http://44.249.15.152:8081'
         NEXUS_REPO = 'maven-releases'
         NEXUS_GROUP = 'com/web/cal'
         NEXUS_ARTIFACT = 'webapp-add'
-        TOMCAT_URL = 'http://18.216.0.11:8080/manager/text'
+        TOMCAT_URL = 'http://54.187.169.243:8080/manager/text'
     }
 
     stages {
