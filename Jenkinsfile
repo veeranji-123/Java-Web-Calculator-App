@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'Sonar' }
+    agent { label 'sonar' }
 
     tools {
         jdk 'JDK17'
@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        SONARQUBE_SERVER = 'SonarQube'
+        SONARQUBE_SERVER = 'sonar'
         MVN_SETTINGS = '/etc/maven/settings.xml'
         NEXUS_URL = 'http://44.249.15.152:8081'
         NEXUS_REPO = 'maven-releases'
