@@ -9,11 +9,11 @@ pipeline {
     environment {
         SONARQUBE_SERVER = 'sonar'
         MVN_SETTINGS = '/etc/maven/settings.xml'
-        NEXUS_URL = 'http://44.249.15.152:8081'
+        NEXUS_URL = 'http://34.216.123.235:8081'
         NEXUS_REPO = 'maven-releases'
         NEXUS_GROUP = 'com/web/cal'
         NEXUS_ARTIFACT = 'webapp-add'
-        TOMCAT_URL = 'http://54.187.169.243:8080/manager/text'
+        TOMCAT_URL = 'http://54.202.187.150:8080/manager/text'
     }
 
     stages {
