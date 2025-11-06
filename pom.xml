@@ -59,7 +59,7 @@
   <distributionManagement>
     <repository>
       <id>maven-releases</id>
-      <url>http://54.187.169.243:8080/repository/maven-releases/</url>
+      <url>http://54.202.187.150:8080/repository/maven-releases/</url>
     </repository>
   </distributionManagement>
 
