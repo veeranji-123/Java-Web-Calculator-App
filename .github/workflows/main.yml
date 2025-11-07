@@ -1,106 +1,99 @@
-name: Java CI/CD with SonarQube, Nexus, and Tomcat
+name: Java WebApp CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     env:
-      # SonarQube configuration
+      MVN_SETTINGS: /home/runner/.m2/settings.xml
       SONAR_HOST_URL: http://52.10.29.223:9000
-      SONAR_TOKEN: ${{ secrets.SONARQUB_TOKIN }}
-
-      # Nexus & Tomcat credentials are stored in separate secret sets
-      NEXUS: ${{ secrets.NEXUS }}
-      TOMCAT: ${{ secrets.TOMCAT }}
+      NEXUS_URL: http://34.216.123.235:8081
+      NEXUS_REPO: maven-releases
+      NEXUS_GROUP: com/web/cal
+      NEXUS_ARTIFACT: webapp-add
+      TOMCAT_URL: http://54.202.187.150:8080/manager/text
 
     steps:
-      - name: Checkout source code
+      # === Stage 1: Checkout Code ===
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # === Stage 2: Set up JDK & Maven ===
+      - name: ☕ Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          distribution: temurin
+          java-version: 17
+          cache: maven
 
-      # -----------------------------------------------------
-      # 🧠 Parse Secrets into Environment Variables
-      # -----------------------------------------------------
-      - name: Parse Nexus & Tomcat Secrets
+      # === Stage 3: SonarQube Analysis ===
+      - name: 🔍 SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONARQUB_TOKIN }}
         run: |
-          echo "Parsing Nexus & Tomcat Secrets..."
-          # Format expected inside secrets:
-          # NEXUS=ip=<ip>,user=<username>,pass=<password>
-          # TOMCAT=ip=<ip>,user=<username>,pass=<password>
-
-          # Extract Nexus values
-          export NEXUS_IP=$(echo "$NEXUS" | sed -n 's/.*ip=\([^,]*\).*/\1/p')
-          export NEXUS_USER=$(echo "$NEXUS" | sed -n 's/.*user=\([^,]*\).*/\1/p')
-          export NEXUS_PASS=$(echo "$NEXUS" | sed -n 's/.*pass=\([^,]*\).*/\1/p')
-
-          # Extract Tomcat values
-          export TOMCAT_IP=$(echo "$TOMCAT" | sed -n 's/.*ip=\([^,]*\).*/\1/p')
-          export TOMCAT_USER=$(echo "$TOMCAT" | sed -n 's/.*user=\([^,]*\).*/\1/p')
-          export TOMCAT_PASS=$(echo "$TOMCAT" | sed -n 's/.*pass=\([^,]*\).*/\1/p')
-
-          echo "✅ Secrets parsed successfully"
-          echo "Nexus IP: $NEXUS_IP"
-          echo "Tomcat IP: $TOMCAT_IP"
-
-          # Export for later steps
-          echo "NEXUS_IP=$NEXUS_IP" >> $GITHUB_ENV
-          echo "NEXUS_USER=$NEXUS_USER" >> $GITHUB_ENV
-          echo "NEXUS_PASS=$NEXUS_PASS" >> $GITHUB_ENV
-          echo "TOMCAT_IP=$TOMCAT_IP" >> $GITHUB_ENV
-          echo "TOMCAT_USER=$TOMCAT_USER" >> $GITHUB_ENV
-          echo "TOMCAT_PASS=$TOMCAT_PASS" >> $GITHUB_ENV
-
-      # -----------------------------------------------------
-      # 🔍 Run SonarQube Code Analysis
-      # -----------------------------------------------------
-      - name: Run SonarQube Analysis
-        run: |
-          echo "Starting SonarQube analysis..."
-          mvn -B clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+          echo "Running SonarQube analysis..."
+          mvn clean verify sonar:sonar \
+            -DskipTests \
             -Dsonar.projectKey=webapp-add \
-            -Dsonar.host.url=$SONAR_HOST_URL \
-            -Dsonar.login=$SONAR_TOKEN
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.login=${SONAR_TOKEN}
 
-      # -----------------------------------------------------
-      # ⚙️ Build Java App (WAR)
-      # -----------------------------------------------------
-      - name: Build with Maven
+      # === Stage 4: Build WAR ===
+      - name: ⚙️ Build WAR file
         run: |
-          echo "Building Java project..."
+          echo "Building WAR package..."
           mvn clean package -DskipTests
-          echo "✅ Build completed"
+          ls -lh target/*.war
 
-      # -----------------------------------------------------
-      # 📦 Upload Artifact to Nexus
-      # -----------------------------------------------------
-      - name: Upload artifact to Nexus
+      # === Stage 5: Upload Artifact to Nexus ===
+      - name: 📤 Upload WAR to Nexus
+        env:
+          NEXUS_USR: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PSW: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          echo "Uploading artifact to Nexus..."
-          mvn deploy \
-            -DaltDeploymentRepository=nexus::default::http://$NEXUS_IP:8081/repository/maven-releases/ \
-            -Dnexus.username=$NEXUS_USER \
-            -Dnexus.password=$NEXUS_PASS
-          echo "✅ Artifact uploaded to Nexus"
+          set -e
+          WAR_FILE=$(ls target/*.war | head -1)
+          VERSION="0.0.${{ github.run_number }}"
+          echo "Uploading $WAR_FILE to Nexus..."
+          curl -v -u ${NEXUS_USR}:${NEXUS_PSW} --upload-file "$WAR_FILE" \
+            "${NEXUS_URL}/repository/${NEXUS_REPO}/${NEXUS_GROUP}/${NEXUS_ARTIFACT}/${VERSION}/${NEXUS_ARTIFACT}-${VERSION}.war"
+          echo "✅ Nexus upload successful!"
 
-      # -----------------------------------------------------
-      # 🚀 Deploy to Tomcat
-      # -----------------------------------------------------
-      - name: Install sshpass for deployment
-        run: sudo apt-get update && sudo apt-get install -y sshpass
-
-      - name: Deploy WAR to Tomcat
+      # === Stage 6: Deploy to Tomcat ===
+      - name: 🚀 Deploy to Tomcat
+        env:
+          NEXUS_USR: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PSW: ${{ secrets.NEXUS_PASSWORD }}
+          TOMCAT_USR: ${{ secrets.TOMCAT_USERNAME }}
+          TOMCAT_PSW: ${{ secrets.TOMCAT_PASSWORD }}
         run: |
-          ARTIFACT=$(ls target/*.war | head -n 1)
-          echo "Deploying $ARTIFACT to Tomcat..."
-          sshpass -p "$TOMCAT_PASS" scp -o StrictHostKeyChecking=no "$ARTIFACT" "$TOMCAT_USER@$TOMCAT_IP:/opt/tomcat/webapps/"
-          echo "✅ Deployment completed successfully!"
+          set -e
+          echo "Fetching latest WAR from Nexus..."
+          DOWNLOAD_URL=$(curl -s -u ${NEXUS_USR}:${NEXUS_PSW} \
+              "${NEXUS_URL}/service/rest/v1/search?repository=${NEXUS_REPO}&group=com.web.cal&name=webapp-add" \
+              | grep -oP '"downloadUrl"\s*:\s*"\K[^"]+\.war' | grep -vE '\.md5|\.sha1' | tail -1)
+
+          if [[ -z "$DOWNLOAD_URL" ]]; then
+            echo "❌ No WAR found in Nexus!"
+            exit 1
+          fi
+
+          echo "⬇️ Downloading WAR from: $DOWNLOAD_URL"
+          curl -u ${NEXUS_USR}:${NEXUS_PSW} -O "$DOWNLOAD_URL"
+          WAR_FILE=$(basename "$DOWNLOAD_URL")
+          APP_NAME=$(echo "$WAR_FILE" | sed 's/-[0-9].*//')
+
+          echo "🧹 Removing old deployment..."
+          curl -u ${TOMCAT_USR}:${TOMCAT_PSW} "${TOMCAT_URL}/undeploy?path=/${APP_NAME}" || true
+
+          echo "🚀 Deploying new WAR to Tomcat..."
+          curl -u ${TOMCAT_USR}:${TOMCAT_PSW} --upload-file "$WAR_FILE" \
+              "${TOMCAT_URL}/deploy?path=/${APP_NAME}&update=true"
+
+          echo "✅ Deployment successful — App live on Tomcat!"
+
