@@ -1,21 +1,25 @@
-name: Java CI/CD with SonarQube, Nexus, and Tomcat
+name: Java CI with Maven, SonarQube, Nexus, Tomcat
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     env:
-      SONARQUB_TOKIN: ${{ secrets.SONARQUB_TOKIN }}
-      NEXUS: ${{ secrets.NEXUS }}
-      TOMCAT: ${{ secrets.TOMCAT }}
+      SONAR_HOST_URL: http://52.10.29.223:9000
+      SONAR_TOKEN: ${{ secrets.SONARQUB_TOKIN }}
+      NEXUS_USER: ${{ secrets.NEXUS.NEXUS_USER }}
+      NEXUS_PASS: ${{ secrets.NEXUS.NEXUS_PASS }}
+      TOMCAT_USER: ${{ secrets.TOMCAT.TOMCAT_USER }}
+      TOMCAT_PASS: ${{ secrets.TOMCAT.TOMCAT_PASS }}
 
     steps:
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -24,48 +28,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Parse Secrets
+      - name: Verify Environment Variables
         run: |
-          echo "Parsing secrets..."
-          echo "$SONARQUB_TOKIN" > sonar.env
-          echo "$NEXUS" > nexus.env
-          echo "$TOMCAT" > tomcat.env
-          set -a
-          source sonar.env || true
-          source nexus.env || true
-          source tomcat.env || true
-          set +a
-          echo "✅ Secrets loaded."
+          echo "SONAR_HOST_URL=$SONAR_HOST_URL"
+          echo "Checking if token exists..."
+          if [ -z "$SONAR_TOKEN" ]; then echo "❌ SONAR_TOKEN missing"; exit 1; fi
 
-      - name: Debug loaded SonarQube variables
-        run: |
-          echo "SONAR_SERVER_IP=$SONAR_SERVER_IP"
-          echo "SONAR_TOKEN length: ${#SONAR_TOKEN}"
+      - name: Build with Maven and Run SonarQube Analysis
+        run: mvn -B clean verify sonar:sonar \
+          -Dsonar.projectKey=webapp-add \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN
 
-      - name: Run SonarQube analysis
-        run: |
-          echo "🔍 Checking SonarQube URL: http://$SONAR_SERVER_IP:9000"
-          mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-            -Dsonar.projectKey=my-java-app \
-            -Dsonar.host.url=http://$SONAR_SERVER_IP:9000 \
-            -Dsonar.login=$SONAR_TOKEN
-
-      - name: Build with Maven
-        run: mvn clean package -DskipTests
-
-      - name: Upload artifact to Nexus
-        run: |
-          mvn deploy \
-            -DaltDeploymentRepository=nexus::default::http://$NEXUS_IP:8081/repository/maven-releases/ \
-            -Dnexus.username=$NEXUS_USER \
-            -Dnexus.password=$NEXUS_PASS
-
-      - name: Install sshpass
-        run: sudo apt-get update && sudo apt-get install -y sshpass
-
-      - name: Deploy WAR to Tomcat
-        run: |
-          ARTIFACT=$(ls target/*.war | head -n 1)
-          echo "Deploying $ARTIFACT to Tomcat..."
           sshpass -p "$TOMCAT_PASS" scp -o StrictHostKeyChecking=no $ARTIFACT $TOMCAT_USER@$TOMCAT_IP:/opt/tomcat/webapps/
           echo "✅ Deployment completed!"
