@@ -27,18 +27,25 @@ jobs:
       - name: Parse Secrets
         run: |
           echo "Parsing secrets..."
-          # Extract variables (assuming multi-line key=value format)
           echo "$SONARQUB_TOKIN" > sonar.env
           echo "$NEXUS" > nexus.env
           echo "$TOMCAT" > tomcat.env
-          export $(grep -v '^#' sonar.env | xargs)
-          export $(grep -v '^#' nexus.env | xargs)
-          export $(grep -v '^#' tomcat.env | xargs)
-          echo "✅ Secrets loaded"
+          set -a
+          source sonar.env || true
+          source nexus.env || true
+          source tomcat.env || true
+          set +a
+          echo "✅ Secrets loaded."
+
+      - name: Debug loaded SonarQube variables
+        run: |
+          echo "SONAR_SERVER_IP=$SONAR_SERVER_IP"
+          echo "SONAR_TOKEN length: ${#SONAR_TOKEN}"
 
       - name: Run SonarQube analysis
         run: |
-          mvn clean verify sonar:sonar \
+          echo "🔍 Checking SonarQube URL: http://$SONAR_SERVER_IP:9000"
+          mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
             -Dsonar.projectKey=my-java-app \
             -Dsonar.host.url=http://$SONAR_SERVER_IP:9000 \
             -Dsonar.login=$SONAR_TOKEN
@@ -53,7 +60,7 @@ jobs:
             -Dnexus.username=$NEXUS_USER \
             -Dnexus.password=$NEXUS_PASS
 
-      - name: Install sshpass for deployment
+      - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Deploy WAR to Tomcat
@@ -61,5 +68,4 @@ jobs:
           ARTIFACT=$(ls target/*.war | head -n 1)
           echo "Deploying $ARTIFACT to Tomcat..."
           sshpass -p "$TOMCAT_PASS" scp -o StrictHostKeyChecking=no $ARTIFACT $TOMCAT_USER@$TOMCAT_IP:/opt/tomcat/webapps/
-          echo "Deployment completed!"
-
+          echo "✅ Deployment completed!"
