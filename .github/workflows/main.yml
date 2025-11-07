@@ -10,14 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SONAR_SERVER_IP: ${{ secrets.SONAR_SERVER_IP }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      NEXUS_IP: ${{ secrets.NEXUS_IP }}
-      NEXUS_USER: ${{ secrets.NEXUS_USER }}
-      NEXUS_PASS: ${{ secrets.NEXUS_PASS }}
-      TOMCAT_IP: ${{ secrets.TOMCAT_IP }}
-      TOMCAT_USER: ${{ secrets.TOMCAT_USER }}
-      TOMCAT_PASS: ${{ secrets.TOMCAT_PASS }}
+      SONARQUB_TOKIN: ${{ secrets.SONARQUB_TOKIN }}
+      NEXUS: ${{ secrets.NEXUS }}
+      TOMCAT: ${{ secrets.TOMCAT }}
 
     steps:
       - name: Checkout source code
@@ -29,57 +24,42 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ✅ Validate Secrets
-      - name: Validate required secrets
+      - name: Parse Secrets
         run: |
-          echo "🔍 Validating Secrets..."
-          MISSING=0
-          for VAR in SONAR_SERVER_IP SONAR_TOKEN NEXUS_IP NEXUS_USER NEXUS_PASS TOMCAT_IP TOMCAT_USER TOMCAT_PASS; do
-            if [ -z "${!VAR}" ]; then
-              echo "❌ Missing secret: $VAR"
-              MISSING=1
-            fi
-          done
-          if [ $MISSING -eq 1 ]; then
-            echo "🚫 One or more secrets are missing. Please check GitHub Action Secrets."
-            exit 1
-          fi
-          echo "✅ All required secrets are available."
+          echo "Parsing secrets..."
+          # Extract variables (assuming multi-line key=value format)
+          echo "$SONARQUB_TOKIN" > sonar.env
+          echo "$NEXUS" > nexus.env
+          echo "$TOMCAT" > tomcat.env
+          export $(grep -v '^#' sonar.env | xargs)
+          export $(grep -v '^#' nexus.env | xargs)
+          export $(grep -v '^#' tomcat.env | xargs)
+          echo "✅ Secrets loaded"
 
-      # --- SONARQUBE ANALYSIS ---
-      - name: Run SonarQube Analysis
-        env:
-          SONAR_HOST_URL: http://${{ env.SONAR_SERVER_IP }}:9000
-          SONAR_LOGIN: ${{ env.SONAR_TOKEN }}
+      - name: Run SonarQube analysis
         run: |
-          echo "🔍 Checking SonarQube URL: $SONAR_HOST_URL"
           mvn clean verify sonar:sonar \
             -Dsonar.projectKey=my-java-app \
-            -Dsonar.host.url=$SONAR_HOST_URL \
-            -Dsonar.login=$SONAR_LOGIN
+            -Dsonar.host.url=http://$SONAR_SERVER_IP:9000 \
+            -Dsonar.login=$SONAR_TOKEN
 
-      # --- BUILD STAGE ---
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      # --- NEXUS DEPLOY STAGE ---
       - name: Upload artifact to Nexus
-        env:
-          NEXUS_URL: http://${{ env.NEXUS_IP }}:8081/repository/maven-releases/
         run: |
-          echo "📦 Deploying to Nexus at $NEXUS_URL"
           mvn deploy \
-            -DaltDeploymentRepository=nexus::default::$NEXUS_URL \
+            -DaltDeploymentRepository=nexus::default::http://$NEXUS_IP:8081/repository/maven-releases/ \
             -Dnexus.username=$NEXUS_USER \
             -Dnexus.password=$NEXUS_PASS
 
-      # --- TOMCAT DEPLOY STAGE ---
-      - name: Install sshpass
+      - name: Install sshpass for deployment
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Deploy WAR to Tomcat
         run: |
           ARTIFACT=$(ls target/*.war | head -n 1)
-          echo "🚀 Deploying $ARTIFACT to Tomcat on $TOMCAT_IP..."
-          sshpass -p "$TOMCAT_PASS" scp -o StrictHostKeyChecking=no "$ARTIFACT" "$TOMCAT_USER@$TOMCAT_IP:/opt/tomcat/webapps/"
-          echo "✅ Deployment completed successfully!"
+          echo "Deploying $ARTIFACT to Tomcat..."
+          sshpass -p "$TOMCAT_PASS" scp -o StrictHostKeyChecking=no $ARTIFACT $TOMCAT_USER@$TOMCAT_IP:/opt/tomcat/webapps/
+          echo "Deployment completed!"
+
